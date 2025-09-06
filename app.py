@@ -1,13 +1,9 @@
-# =====================
-# PHASE 0: IMPORTS & SETUP
-# =====================
 import kagglehub
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.linear_model import LinearRegression, Ridge
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.preprocessing import PolynomialFeatures, StandardScaler
 from sklearn.model_selection import train_test_split
@@ -16,22 +12,16 @@ import os
 import warnings
 warnings.filterwarnings('ignore')
 
-# Set style for plots
 sns.set_style("whitegrid")
 plt.rcParams['figure.figsize'] = (10, 6)
 
-# =====================
-# PHASE 1: DATA LOADING FROM KAGGLE
-# =====================
 print("=== PHASE 1: DOWNLOADING DATA FROM KAGGLE ===")
 
 try:
-    # Download the dataset
     print("Downloading housing dataset from Kaggle...")
     path = kagglehub.dataset_download("yasserh/housing-prices-dataset")
     print(f"Dataset downloaded to: {path}")
 
-    # Find and load the CSV file
     csv_files = [f for f in os.listdir(path) if f.endswith('.csv')]
     if csv_files:
         data_file = os.path.join(path, csv_files[0])
@@ -43,7 +33,6 @@ try:
 except Exception as e:
     print(f"Error downloading from Kaggle: {e}")
     print("Falling back to local file...")
-    # Fallback: try to load from local path
     try:
         data = pd.read_csv("Housing.csv")
         print("Loaded from local file 'Housing.csv'")
@@ -53,22 +42,14 @@ except Exception as e:
 
 print("\nFirst 5 rows of the dataset:")
 print(data.head())
-print(f"\nData types:\n{data.dtypes}")
 
-# =====================
-# PHASE 2: DATA CLEANING
-# =====================
 print("\n=== PHASE 2: DATA CLEANING ===")
 
-# Create a clean copy
 data_cleaned = data.copy()
 
-# Display initial summary to identify outliers
 print("Initial summary statistics:")
 print(data_cleaned[['price', 'area']].describe())
 
-# Remove clear outlier errors (based on typical housing data)
-# These would be properties with extremely large area but very low price
 price_q1 = data_cleaned['price'].quantile(0.25)
 price_q3 = data_cleaned['price'].quantile(0.75)
 price_iqr = price_q3 - price_q1
@@ -77,7 +58,6 @@ area_q1 = data_cleaned['area'].quantile(0.25)
 area_q3 = data_cleaned['area'].quantile(0.75)
 area_iqr = area_q3 - area_q1
 
-# Identify outliers (you can adjust these thresholds)
 price_outliers = data_cleaned[
     (data_cleaned['price'] < price_q1 - 1.5 * price_iqr) |
     (data_cleaned['price'] > price_q3 + 1.5 * price_iqr)
@@ -88,10 +68,8 @@ area_outliers = data_cleaned[
     (data_cleaned['area'] > area_q3 + 1.5 * area_iqr)
 ]
 
-print(
-    f"Found {len(price_outliers)} price outliers and {len(area_outliers)} area outliers")
+print(f"Found {len(price_outliers)} price outliers and {len(area_outliers)} area outliers")
 
-# Remove only the most extreme outliers (manual inspection would be better)
 extreme_outliers = data_cleaned[
     (data_cleaned['area'] > 10000) & (data_cleaned['price'] < 5000000)
 ]
@@ -100,22 +78,16 @@ data_cleaned = data_cleaned.drop(extreme_outliers.index)
 
 print(f"New data shape after cleaning: {data_cleaned.shape}")
 
-# =====================
-# PHASE 3: FEATURE ENGINEERING
-# =====================
 print("\n=== PHASE 3: FEATURE ENGINEERING ===")
 
-# Apply log transformation to price and area (crucial for housing data)
 data_cleaned['log_price'] = np.log(data_cleaned['price'])
 data_cleaned['log_area'] = np.log(data_cleaned['area'])
 
-# Encode binary features (yes/no to 1/0)
 binary_vars = ['mainroad', 'guestroom', 'basement',
                'hotwaterheating', 'airconditioning', 'prefarea']
 for col in binary_vars:
     data_cleaned[col] = data_cleaned[col].map({'yes': 1, 'no': 0})
 
-# One-hot encode furnishingstatus
 furnishing_dummies = pd.get_dummies(
     data_cleaned['furnishingstatus'], prefix='furnishing', drop_first=True)
 data_cleaned = pd.concat([data_cleaned, furnishing_dummies], axis=1)
@@ -124,26 +96,19 @@ data_cleaned.drop('furnishingstatus', axis=1, inplace=True)
 print("Feature engineering completed successfully")
 print(f"New columns: {data_cleaned.columns.tolist()}")
 
-# =====================
-# PHASE 4: TRAIN-TEST SPLIT & SCALING
-# =====================
 print("\n=== PHASE 4: TRAIN-TEST SPLIT & SCALING ===")
 
-# Define features and target
 X = data_cleaned.drop(['price', 'area', 'log_price'], axis=1)
 y = data_cleaned['log_price']
 
-# Split the data
 X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.2, random_state=42, shuffle=True)
 print(f"Training set: {X_train.shape}, Test set: {X_test.shape}")
 
-# Scale the features
 scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
 
-# Convert back to DataFrames for better handling
 X_train_scaled = pd.DataFrame(
     X_train_scaled, columns=X.columns, index=X_train.index)
 X_test_scaled = pd.DataFrame(
@@ -151,12 +116,8 @@ X_test_scaled = pd.DataFrame(
 
 print("Feature scaling completed")
 
-# =====================
-# PHASE 5: MODEL SELECTION
-# =====================
 print("\n=== PHASE 5: MODEL SELECTION ===")
 
-# Test different polynomial degrees
 print("Testing polynomial degrees...")
 train_errors, test_errors = [], []
 degrees = range(1, 6)
@@ -178,11 +139,9 @@ for d in degrees:
     print(
         f"Degree {d}: Train MSE = {train_errors[-1]:.4f}, Test MSE = {test_errors[-1]:.4f}")
 
-# Find best degree
 best_degree = degrees[np.argmin(test_errors)]
 print(f"\nBest degree: {best_degree}")
 
-# Plot results
 plt.figure(figsize=(10, 6))
 plt.plot(degrees, train_errors, 'o-',
          label='Training Error', linewidth=2, markersize=8)
@@ -197,12 +156,8 @@ plt.legend()
 plt.grid(True, alpha=0.3)
 plt.show()
 
-# =====================
-# PHASE 6: FINAL MODEL TRAINING
-# =====================
 print("\n=== PHASE 6: FINAL MODEL TRAINING ===")
 
-# Train final model with best degree
 poly = PolynomialFeatures(degree=best_degree)
 X_train_poly = poly.fit_transform(X_train_scaled)
 X_test_poly = poly.transform(X_test_scaled)
@@ -210,7 +165,6 @@ X_test_poly = poly.transform(X_test_scaled)
 model = LinearRegression()
 model.fit(X_train_poly, y_train)
 
-# Evaluate final model
 y_pred = model.predict(X_test_poly)
 mse = mean_squared_error(y_test, y_pred)
 r2 = r2_score(y_test, y_pred)
@@ -219,193 +173,102 @@ print(f"FINAL MODEL RESULTS (Degree {best_degree}):")
 print(f"MSE: {mse:.4f}")
 print(f"R² Score: {r2:.4f}")
 
-# Convert error to USD interpretation
 actual_prices = np.exp(y_test)
 predicted_prices = np.exp(y_pred)
 mape = np.mean(np.abs(actual_prices - predicted_prices) / actual_prices) * 100
 print(f"Mean Absolute Percentage Error: {mape:.1f}%")
 
-# =====================
-# PHASE 6.5: CYBERPUNK VISUALIZATIONS & STYLED SUMMARY
-# =====================
-print("\n=== PHASE 6.5: VISUALIZATIONS (CYBERPUNK) ===")
+print("\n=== PHASE 6.5: VISUALIZATIONS ===")
 
-# Custom color palette for cyberpunk style
-cyberpunk_colors = ['#00FFFF', '#FF00FF', '#FFD700', '#00FF7F', '#8A2BE2']
-bg_color = '#0D0D1A'
-text_color = '#FFFFFF'
+colors = ['#2E86AB', '#A23B72', '#F18F01', '#C73E1D', '#6B8F71']
+plt.rcParams['figure.figsize'] = (15, 10)
+plt.rcParams['font.size'] = 12
 
-# Set a dark, futuristic plot style
-plt.style.use('dark_background')
-plt.rcParams['figure.facecolor'] = bg_color
-plt.rcParams['axes.facecolor'] = bg_color
-plt.rcParams['text.color'] = text_color
-plt.rcParams['axes.labelcolor'] = text_color
-plt.rcParams['xtick.color'] = cyberpunk_colors[0]
-plt.rcParams['ytick.color'] = cyberpunk_colors[1]
-plt.rcParams['grid.color'] = cyberpunk_colors[2]
-plt.rcParams['grid.alpha'] = 0.5
-plt.rcParams['font.family'] = 'monospace'
-
-# Create subplot grid for cyberpunk dashboard
 fig, axes = plt.subplots(2, 3, figsize=(18, 12))
-fig.suptitle('CYBERNETIC HOUSING UNIT VALUATION | DATA ANALYTICS PROTOCOL',
-             fontsize=18, fontweight='bold', y=0.98, color=cyberpunk_colors[0])
+fig.suptitle('Housing Price Analysis - Key Insights', fontsize=16, fontweight='bold', y=0.98)
 
-# 1. ACTUAL VS PREDICTED PRICES SCATTER PLOT
-axes[0, 0].scatter(actual_prices, predicted_prices, alpha=0.7,
-                   color=cyberpunk_colors[1], s=50, edgecolors=cyberpunk_colors[2])
-axes[0, 0].plot([actual_prices.min(), actual_prices.max()], [actual_prices.min(
-), actual_prices.max()], 'w--', lw=2, label='OPTIMAL PREDICTION PATH')
-axes[0, 0].set_xlabel('ACTUAL UNIT VALUE ($)', color=cyberpunk_colors[3])
-axes[0, 0].set_ylabel('PREDICTED UNIT VALUE ($)', color=cyberpunk_colors[3])
-axes[0, 0].set_title('ACTUAL VS PREDICTED PRICE',
-                     fontweight='bold', color=cyberpunk_colors[4])
-axes[0, 0].legend(frameon=False)
-axes[0, 0].grid(True, linestyle='--')
+axes[0, 0].scatter(actual_prices, predicted_prices, alpha=0.6, color=colors[0])
+axes[0, 0].plot([actual_prices.min(), actual_prices.max()], 
+                [actual_prices.min(), actual_prices.max()], 
+                'r--', lw=2, label='Perfect Prediction')
+axes[0, 0].set_xlabel('Actual Price ($)')
+axes[0, 0].set_ylabel('Predicted Price ($)')
+axes[0, 0].set_title('Actual vs Predicted Prices\n(Model Accuracy)', fontweight='bold')
+axes[0, 0].legend()
+axes[0, 0].grid(True, alpha=0.3)
 
-# 2. PRICE DISTRIBUTION HISTOGRAM
-axes[0, 1].hist(actual_prices, bins=30,
-                color=cyberpunk_colors[4], alpha=0.6, edgecolor='black')
-axes[0, 1].axvline(actual_prices.mean(), color=cyberpunk_colors[0], linestyle='--',
-                   linewidth=2, label=f'AVG. VALUE: ${actual_prices.mean():,.0f}')
-axes[0, 1].set_xlabel('UNIT VALUE ($)', color=cyberpunk_colors[3])
-axes[0, 1].set_ylabel('FREQUENCY', color=cyberpunk_colors[3])
-axes[0, 1].set_title('HOUSING UNIT VALUE DISTRIBUTION',
-                     fontweight='bold', color=cyberpunk_colors[4])
-axes[0, 1].legend(frameon=False)
-axes[0, 1].grid(True, linestyle='--')
+axes[0, 1].hist(actual_prices, bins=30, color=colors[1], alpha=0.7, edgecolor='black')
+axes[0, 1].axvline(actual_prices.mean(), color='red', linestyle='--', linewidth=2, 
+                  label=f'Mean: ${actual_prices.mean():,.0f}')
+axes[0, 1].set_xlabel('Price ($)')
+axes[0, 1].set_ylabel('Frequency')
+axes[0, 1].set_title('Distribution of Housing Prices', fontweight='bold')
+axes[0, 1].legend()
+axes[0, 1].grid(True, alpha=0.3)
 
-# 3. FEATURE IMPORTANCE BAR CHART
 feature_importance = pd.DataFrame({
     'feature': X.columns,
     'importance': abs(model.coef_[1:len(X.columns)+1])
 }).sort_values('importance', ascending=True)
-axes[0, 2].barh(feature_importance['feature'],
-                feature_importance['importance'], color=cyberpunk_colors[2], alpha=0.8)
-axes[0, 2].set_xlabel('IMPACT RATING', color=cyberpunk_colors[3])
-axes[0, 2].set_title('CORE FACTOR INFLUENCE',
-                     fontweight='bold', color=cyberpunk_colors[4])
+
+axes[0, 2].barh(feature_importance['feature'], feature_importance['importance'], 
+                color=colors[2])
+axes[0, 2].set_xlabel('Importance (Absolute Coefficient Value)')
+axes[0, 2].set_title('Top Factors Influencing House Prices', fontweight='bold')
 axes[0, 2].grid(True, alpha=0.3, axis='x')
 
-# 4. ERROR DISTRIBUTION HISTOGRAM
 error_percentage = ((actual_prices - predicted_prices) / actual_prices) * 100
-axes[1, 0].hist(error_percentage, bins=30,
-                color=cyberpunk_colors[3], alpha=0.6, edgecolor='black')
-axes[1, 0].axvline(0, color=cyberpunk_colors[0],
-                   linestyle='--', linewidth=2, label='ZERO DEVIATION')
-axes[1, 0].set_xlabel('DEVIATION (%)', color=cyberpunk_colors[3])
-axes[1, 0].set_ylabel('FREQUENCY', color=cyberpunk_colors[3])
-axes[1, 0].set_title('PREDICTION DEVIATION DISTRIBUTION',
-                     fontweight='bold', color=cyberpunk_colors[4])
-axes[1, 0].legend(frameon=False)
-axes[1, 0].grid(True, linestyle='--')
+axes[1, 0].hist(error_percentage, bins=30, color=colors[3], alpha=0.7, edgecolor='black')
+axes[1, 0].axvline(0, color='red', linestyle='--', linewidth=2, label='Zero Error')
+axes[1, 0].set_xlabel('Prediction Error (%)')
+axes[1, 0].set_ylabel('Frequency')
+axes[1, 0].set_title('Distribution of Prediction Errors', fontweight='bold')
+axes[1, 0].legend()
+axes[1, 0].grid(True, alpha=0.3)
 
-# 5. PRICE VS AREA SCATTER PLOT
-axes[1, 1].scatter(data_cleaned['area'], data_cleaned['price'], alpha=0.7,
-                   color=cyberpunk_colors[0], s=50, edgecolors=cyberpunk_colors[1])
-axes[1, 1].set_xlabel('UNIT AREA (sq.ft)', color=cyberpunk_colors[3])
-axes[1, 1].set_ylabel('UNIT VALUE ($)', color=cyberpunk_colors[3])
-axes[1, 1].set_title('VALUE VS AREA\n(PRIMARY CORRELATION)',
-                     fontweight='bold', color=cyberpunk_colors[4])
-axes[1, 1].grid(True, linestyle='--')
+axes[1, 1].scatter(data_cleaned['area'], data_cleaned['price'], 
+                  alpha=0.6, color=colors[4], s=30)
+axes[1, 1].set_xlabel('Area (sq.ft)')
+axes[1, 1].set_ylabel('Price ($)')
+axes[1, 1].set_title('Price vs Area\n(Strongest Correlation)', fontweight='bold')
+axes[1, 1].grid(True, alpha=0.3)
 
-# 6. MODEL PERFORMANCE METRICS
-metrics = ['R² SCORE', 'MAPE', 'MSE']
+metrics = ['R² Score', 'MAPE', 'MSE']
 values = [r2, mape, mse]
-color_bars = [cyberpunk_colors[0], cyberpunk_colors[1], cyberpunk_colors[2]]
+color_bars = ['#2E86AB', '#A23B72', '#F18F01']
+
 bars = axes[1, 2].bar(metrics, values, color=color_bars, alpha=0.8)
-axes[1, 2].set_ylabel('RATING', color=cyberpunk_colors[3])
-axes[1, 2].set_title('SYSTEM PERFORMANCE METRICS',
-                     fontweight='bold', color=cyberpunk_colors[4])
+axes[1, 2].set_ylabel('Value')
+axes[1, 2].set_title('Model Performance Metrics', fontweight='bold')
 axes[1, 2].grid(True, alpha=0.3, axis='y')
+
 for bar, value in zip(bars, values):
     height = bar.get_height()
     axes[1, 2].text(bar.get_x() + bar.get_width()/2., height + 0.01,
-                    f'{value:.3f}', ha='center', va='bottom', fontweight='bold', color=text_color)
+                   f'{value:.3f}', ha='center', va='bottom', fontweight='bold')
 
-plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-plt.savefig('housing_price_analysis_dashboard_cyberpunk.png',
-            dpi=300, bbox_inches='tight')
-plt.show()
-
-# EXECUTIVE SUMMARY VISUALIZATION (PLAIN TEXT)
-fig, ax = plt.subplots(figsize=(10, 6))
-ax.axis('off')
-ax.set_facecolor(bg_color)
-
-# Define a more readable, plain-text summary
-summary_text_plain = [
-    f">> DATA CORE: HOUSING ASSET VALUATION PROTOCOL <<",
-    "",
-    f"// PERFORMANCE LOGS:",
-    f"  > R-SQUARED COEFFICIENT: {r2:.3f}",
-    f"  > DEVIATION PERCENTAGE: {mape:.1f}%",
-    f"  > UNIT VALUE SPECTRUM: ${actual_prices.min():,.0f} - ${actual_prices.max():,.0f}",
-    "",
-    f"// PRIMARY INFLUENCE VECTORS:",
-    f"  > VECTOR 1: {feature_importance['feature'].iloc[-1]}",
-    f"  > VECTOR 2: {feature_importance['feature'].iloc[-2]}",
-    f"  > VECTOR 3: {feature_importance['feature'].iloc[-3]}",
-    "",
-    f"// SYSTEM OVERVIEW:",
-    f"  > ANALYZED ASSETS: {len(data_cleaned)}",
-    f"  > OPERATIONAL FEATURES: {len(X.columns)}",
-    f"  > CORE ALGORITHM: POLYNOMIAL REGRESSION (DEGREE {best_degree})"
-]
-
-# Print the plain text version to the console for readability
-print("\n" + "="*50)
-print("Plain-Text Summary (for console readability):")
-for line in summary_text_plain:
-    print(line)
-print("="*50)
-
-# Now, add the same text to the matplotlib figure for saving as an image
-for i, line in enumerate(summary_text_plain):
-    ax.text(0.05, 0.95 - i*0.06, line, ha='left', va='center',
-            fontsize=12, transform=ax.transAxes, color=text_color)
-
-# Add horizontal lines
-ax.axhline(y=0.92, xmin=0.05, xmax=0.95,
-           color=cyberpunk_colors[0], linewidth=2, zorder=2)
-ax.axhline(y=0.74, xmin=0.05, xmax=0.95,
-           color=cyberpunk_colors[1], linewidth=1, alpha=0.7, zorder=1)
-ax.axhline(y=0.42, xmin=0.05, xmax=0.95,
-           color=cyberpunk_colors[1], linewidth=1, alpha=0.7, zorder=1)
-ax.axhline(y=0.18, xmin=0.05, xmax=0.95,
-           color=cyberpunk_colors[1], linewidth=1, alpha=0.7, zorder=1)
-
-plt.savefig('executive_summary_cyberpunk.png', dpi=300, bbox_inches='tight')
-plt.show()
-
-# Additional: Correlation Heatmap
-plt.figure(figsize=(12, 8))
-correlation_matrix = data_cleaned[[
-    'price', 'area', 'bedrooms', 'bathrooms', 'stories', 'parking']].corr()
-sns.heatmap(correlation_matrix, annot=True, cmap='cividis', center=0, square=True,
-            fmt='.2f', cbar_kws={'label': 'CORRELATION COEFFICIENT'}, annot_kws={"color": "white"})
-plt.title('CORRELATION HEATMAP', fontweight='bold',
-          pad=20, color=cyberpunk_colors[0])
 plt.tight_layout()
-plt.savefig('correlation_heatmap_cyberpunk.png', dpi=300, bbox_inches='tight')
+plt.savefig('housing_price_analysis_dashboard.png', dpi=300, bbox_inches='tight')
 plt.show()
 
-print("Visualizations created and saved as PNG files with cyberpunk styling.")
+plt.figure(figsize=(12, 8))
+correlation_matrix = data_cleaned[['price', 'area', 'bedrooms', 'bathrooms', 'stories', 'parking']].corr()
+sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', center=0, 
+            square=True, fmt='.2f', cbar_kws={'label': 'Correlation Coefficient'})
+plt.title('Feature Correlation Heatmap', fontweight='bold', pad=20)
+plt.tight_layout()
+plt.savefig('correlation_heatmap.png', dpi=300, bbox_inches='tight')
+plt.show()
 
-# =====================
-# PHASE 7: INTERACTIVE PREDICTION SYSTEM
-# =====================
+print("Visualizations created and saved as PNG files")
+
 print("\n=== PHASE 7: INTERACTIVE PREDICTION SYSTEM ===")
 
-
 def predict_house_price():
-    """Interactive house price prediction in USD"""
     print("🏠 HOUSE PRICE PREDICTION SYSTEM (USD)")
     print("Please enter the following property details:\n")
 
     try:
-        # Get user input
         bedrooms = int(input("Number of bedrooms: "))
         bathrooms = int(input("Number of bathrooms: "))
         stories = int(input("Number of stories: "))
@@ -413,18 +276,12 @@ def predict_house_price():
         parking = int(input("Number of parking spaces: "))
 
         print("\nPlease answer yes/no for the following:")
-        mainroad = 1 if input(
-            "On main road? (yes/no): ").lower() == 'yes' else 0
-        guestroom = 1 if input(
-            "Has guest room? (yes/no): ").lower() == 'yes' else 0
-        basement = 1 if input(
-            "Has basement? (yes/no): ").lower() == 'yes' else 0
-        hotwaterheating = 1 if input(
-            "Has hot water heating? (yes/no): ").lower() == 'yes' else 0
-        airconditioning = 1 if input(
-            "Has air conditioning? (yes/no): ").lower() == 'yes' else 0
-        prefarea = 1 if input(
-            "In preferred area? (yes/no): ").lower() == 'yes' else 0
+        mainroad = 1 if input("On main road? (yes/no): ").lower() == 'yes' else 0
+        guestroom = 1 if input("Has guest room? (yes/no): ").lower() == 'yes' else 0
+        basement = 1 if input("Has basement? (yes/no): ").lower() == 'yes' else 0
+        hotwaterheating = 1 if input("Has hot water heating? (yes/no): ").lower() == 'yes' else 0
+        airconditioning = 1 if input("Has air conditioning? (yes/no): ").lower() == 'yes' else 0
+        prefarea = 1 if input("In preferred area? (yes/no): ").lower() == 'yes' else 0
 
         print("\nFurnishing status:")
         print("1. Furnished")
@@ -435,28 +292,20 @@ def predict_house_price():
         furnishing_semi = 1 if furnishing_choice == 2 else 0
         furnishing_unfurnished = 1 if furnishing_choice == 3 else 0
 
-        # Create input array with correct feature order
         input_features = np.array([[
             bedrooms, bathrooms, stories, mainroad, guestroom,
             basement, hotwaterheating, airconditioning, parking,
             prefarea, np.log(area), furnishing_semi, furnishing_unfurnished
         ]])
 
-        # Scale the input
         input_scaled = scaler.transform(input_features)
-
-        # Apply polynomial transformation
         input_poly = poly.transform(input_scaled)
-
-        # Predict
         log_prediction = model.predict(input_poly)[0]
         predicted_price = np.exp(log_prediction)
 
-        # Confidence interval based on model performance
         lower_bound = predicted_price * (1 - mape/100)
         upper_bound = predicted_price * (1 + mape/100)
 
-        # Display results
         print("\n" + "="*50)
         print("📊 PREDICTION RESULTS")
         print("="*50)
@@ -472,13 +321,8 @@ def predict_house_price():
         print("Please make sure to enter valid numbers.")
         return None
 
-
-# =====================
-# PHASE 8: SAVE MODEL COMPONENTS
-# =====================
 print("\n=== PHASE 8: SAVE MODEL COMPONENTS ===")
 
-# Save all components for future use
 model_components = {
     'model': model,
     'poly': poly,
@@ -491,12 +335,8 @@ model_components = {
 joblib.dump(model_components, 'house_price_predictor_usd.pkl')
 print("Model saved to 'house_price_predictor_usd.pkl'")
 
-# =====================
-# PHASE 9: RUN THE PREDICTION SYSTEM
-# =====================
 print("\n=== PHASE 9: PREDICTION SYSTEM READY ===")
 print("The model is trained and ready for predictions!")
 print("Run predict_house_price() to start predicting house prices in USD.")
 
-# Start the prediction system
 predict_house_price()
